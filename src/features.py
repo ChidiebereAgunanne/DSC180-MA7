@@ -74,6 +74,10 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     out["cnt_lag_1"] = out[TARGET].shift(1)
     out["cnt_lag_7"] = out[TARGET].shift(LAG_WARMUP)
     out["cnt_roll_7"] = out[TARGET].shift(1).rolling(LAG_WARMUP).mean()
+    # Yesterday's day-over-day change: cnt[d-1] - cnt[d-2]. shift(1) first,
+    # so today's count never enters; on the calendar grid, so the missing
+    # 2011-03-10 yields NaN rather than a silent two-day difference.
+    out["cnt_change_1d"] = out[TARGET].shift(1).diff(1)
 
     return out.dropna().reset_index(drop=True)
 
