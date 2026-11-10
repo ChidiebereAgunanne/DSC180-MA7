@@ -5,6 +5,9 @@ ROOT = Path(__file__).resolve().parents[1]
 RAW = ROOT / "data" / "raw" / "bike_daily.csv"
 PROCESSED = ROOT / "data" / "processed" / "features.parquet"
 METRICS = ROOT / "reports" / "metrics.json"
+# Validation-only scores for feature trials (python -m src.train --valid-only).
+# Never contains test-set numbers; METRICS is written only by the final stage.
+METRICS_VALID = ROOT / "reports" / "metrics_valid.json"
 
 # Daily Capital Bikeshare counts (Fanaee-T & Gama). Canonical home:
 #   https://archive.ics.uci.edu/dataset/275/bike+sharing+dataset

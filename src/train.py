@@ -16,9 +16,10 @@ reason it fails is the headline result.
 Run: python -m src.train
 """
 import json
+import sys
 
 import pandas as pd
-from sklearn.base import BaseEstimator, RegressorMixin
+from sklearn.base import BaseEstimator, RegressorMixin, clone
 from sklearn.dummy import DummyRegressor
 from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.linear_model import Ridge
@@ -26,7 +27,7 @@ from sklearn.metrics import mean_absolute_error, r2_score
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
-from src.config import METRICS, PROCESSED, TARGET, TRAIN_END, VALID_END
+from src.config import METRICS, METRICS_VALID, PROCESSED, TARGET, TRAIN_END, VALID_END
 from src.features import feature_columns
 
 
@@ -62,6 +63,32 @@ def temporal_split(df: pd.DataFrame):
     return train, valid, test
 
 
+def score_valid_only(df: pd.DataFrame, cols: list[str]) -> dict:
+    """Fit on train, score on validation. Test rows are removed *before*
+    the split, so no model can be fit on or scored against them. Used for
+    every feature trial; the test set is touched once, by fit_and_score()."""
+    pre_test = df[df.dteday <= VALID_END]
+    train, valid, test = temporal_split(pre_test)
+    assert len(test) == 0, "validation-only path must not see test rows"
+    results = {
+        "n_features": len(cols),
+        "features": cols,
+        "n_train": len(train),
+        "n_valid": len(valid),
+        "valid_dates": [str(valid.dteday.min().date()), str(valid.dteday.max().date())],
+    }
+    for name, proto in MODELS.items():
+        model = clone(proto).fit(train[cols], train[TARGET])
+        pred = model.predict(valid[cols])
+        results[name] = {
+            "valid": {
+                "r2": round(float(r2_score(valid[TARGET], pred)), 4),
+                "mae": round(float(mean_absolute_error(valid[TARGET], pred)), 1),
+            }
+        }
+    return results
+
+
 def fit_and_score() -> dict:
     df = pd.read_parquet(PROCESSED)
     cols = feature_columns(df)
@@ -87,6 +114,14 @@ def fit_and_score() -> dict:
 
 
 if __name__ == "__main__":
+    if "--valid-only" in sys.argv:
+        df = pd.read_parquet(PROCESSED)
+        res = score_valid_only(df, feature_columns(df))
+        METRICS_VALID.parent.mkdir(parents=True, exist_ok=True)
+        METRICS_VALID.write_text(json.dumps(res, indent=2))
+        print(json.dumps({k: v for k, v in res.items() if k != "features"}, indent=2))
+        print(f"OK train --valid-only: {res['n_valid']} valid rows, no test rows -> {METRICS_VALID.name}")
+        sys.exit(0)
     res = fit_and_score()
     METRICS.parent.mkdir(parents=True, exist_ok=True)
     METRICS.write_text(json.dumps(res, indent=2))
