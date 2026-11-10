@@ -10,7 +10,7 @@ Run: python -m src.features
 import numpy as np
 import pandas as pd
 
-from src.config import FORBIDDEN, LAG_WARMUP, PROCESSED, TARGET
+from src.config import ENCODED_ONLY_COLS, FORBIDDEN, LAG_WARMUP, PROCESSED, TARGET
 from src.ingest import load_raw
 
 WEATHER_ORDER = {"GOOD": 0, "MISTY": 1, "BAD": 2}
@@ -83,9 +83,13 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def feature_columns(df: pd.DataFrame) -> list[str]:
-    """Numeric columns that are safe to feed the model."""
+    """Numeric columns that are safe to feed the model.
+
+    FORBIDDEN is always excluded. Raw columns classified encoded-only are
+    excluded too, whatever their dtype; load_raw has already refused any
+    raw column that was never classified."""
     numeric = df.select_dtypes(include="number").columns
-    return [c for c in numeric if c not in FORBIDDEN]
+    return [c for c in numeric if c not in FORBIDDEN | ENCODED_ONLY_COLS]
 
 
 if __name__ == "__main__":

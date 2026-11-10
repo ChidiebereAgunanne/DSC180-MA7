@@ -48,6 +48,29 @@ UNVERIFIED_COLS = {"cnt_2d_bfr"}
 # What feature_columns() and the tests actually enforce.
 FORBIDDEN = LEAKAGE_COLS | TIME_INDEX_COLS | UNVERIFIED_COLS
 
+# --- Every raw column, classified by hand ---------------------------------
+# A numeric dtype is not an approval. src.ingest.load_raw raises on any raw
+# column missing from this map; tests/test_contract.py checks each column
+# sits in exactly one class. Adding a raw column means deciding its class.
+
+# Same-day weather readings: measured on d, treated as known to a
+# forecaster (a next-day weather forecast stands in for them in deployment).
+APPROVED_RAW_FEATURES = {"temp", "atemp", "hum", "windspeed"}
+
+# Inputs to engineered features in src/features.py, never fed raw: the
+# date drives dayofweek/month_sin/month_cos; labels are encoded explicitly.
+# season/mnth/weekday duplicate what the date already gives.
+ENCODED_ONLY_COLS = {"dteday", "season", "mnth", "weekday", "holiday", "workday", "weather"}
+
+RAW_COLUMN_CLASSES = {
+    "leakage": LEAKAGE_COLS,
+    "time_index": TIME_INDEX_COLS,
+    "unverified": UNVERIFIED_COLS,
+    "approved_feature": APPROVED_RAW_FEATURES,
+    "encoded_only": ENCODED_ONLY_COLS,
+}
+CLASSIFIED_RAW_COLS = set().union(*RAW_COLUMN_CLASSES.values())
+
 # Temporal split: train on 2011, validate on H1 2012, test on H2 2012.
 TRAIN_END = "2011-12-31"
 VALID_END = "2012-06-30"

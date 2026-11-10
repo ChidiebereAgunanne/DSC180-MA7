@@ -7,7 +7,7 @@ import urllib.request
 
 import pandas as pd
 
-from src.config import DATA_URL, RAW
+from src.config import CLASSIFIED_RAW_COLS, DATA_URL, RAW
 
 EXPECTED_MIN_ROWS = 700
 REQUIRED_COLS = {"dteday", "cnt", "casual", "registered", "temp", "hum", "windspeed"}
@@ -25,6 +25,12 @@ def load_raw() -> pd.DataFrame:
     missing = REQUIRED_COLS - set(df.columns)
     if missing:
         raise ValueError(f"raw data is missing required columns: {sorted(missing)}")
+    unclassified = set(df.columns) - CLASSIFIED_RAW_COLS
+    if unclassified:
+        raise ValueError(
+            f"unclassified raw columns {sorted(unclassified)}: add each to a class "
+            "in src/config.py RAW_COLUMN_CLASSES before it can be used"
+        )
     if len(df) < EXPECTED_MIN_ROWS:
         raise ValueError(f"raw data has only {len(df)} rows; expected >= {EXPECTED_MIN_ROWS}")
     return df
