@@ -43,6 +43,42 @@ def test_only_expected_rows_are_dropped(raw, feats):
     assert lost <= allowed_loss, f"lost {lost} rows; expected at most {allowed_loss}"
 
 
+def test_every_raw_column_is_explicitly_classified():
+    """Each column in the raw CSV must appear in exactly one class in
+    src/config.py RAW_COLUMN_CLASSES. Approval is a decision recorded in
+    config, never inferred from dtype or from feature_columns() output."""
+    from src.config import RAW, RAW_COLUMN_CLASSES
+
+    header = pd.read_csv(RAW, nrows=0).columns
+    for col in header:
+        homes = [k for k, cols in RAW_COLUMN_CLASSES.items() if col in cols]
+        assert len(homes) == 1, f"raw column {col!r} classified in {homes or 'nothing'}"
+
+
+def test_unclassified_raw_column_is_rejected(tmp_path, monkeypatch):
+    """A new numeric column in the raw file must stop the pipeline, not
+    flow silently into the model because select_dtypes calls it a number."""
+    import src.ingest
+    from src.config import RAW
+
+    df = pd.read_csv(RAW)
+    df["new_sensor"] = 1.0  # numeric, not forbidden, never reviewed
+    fake = tmp_path / "bike_daily.csv"
+    df.to_csv(fake, index=False)
+    monkeypatch.setattr(src.ingest, "RAW", fake)
+    with pytest.raises(ValueError, match="new_sensor"):
+        src.ingest.load_raw()
+
+
+def test_raw_features_are_only_the_approved_ones(raw, feats):
+    """The raw columns that reach the model must be a subset of the
+    explicitly approved class, whatever their dtype."""
+    from src.config import RAW_COLUMN_CLASSES
+
+    raw_in_model = set(feature_columns(feats)) & set(raw.columns)
+    assert raw_in_model <= RAW_COLUMN_CLASSES["approved_feature"]
+
+
 def test_beats_the_mean_baseline(feats):
     """A model that cannot beat predicting the training mean is not a result."""
     cols = feature_columns(feats)
