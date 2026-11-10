@@ -57,6 +57,34 @@ def test_rolling_mean_excludes_today(feats):
         assert feats.set_index("dteday").cnt_roll_7[date] == pytest.approx(expected)
 
 
+def test_cnt_change_1d_hand_calculated(feats):
+    """cnt_change_1d on d is cnt[d-1] - cnt[d-2], both strictly before d.
+
+    Hand-computed from data/raw/bike_daily.csv:
+      2012-03-13 cnt = 5847, 2012-03-14 cnt = 6312, 2012-03-15 cnt = 6192
+      expected on 2012-03-15: 6312 - 5847 = 465
+    A same-day leak (cnt.diff() with no shift) would give 6192 - 6312 = -120.
+    """
+    row = feats.set_index("dteday").loc[pd.Timestamp("2012-03-15")]
+    assert row.cnt_change_1d == pytest.approx(465)
+    assert row[TARGET] == 6192  # today's count is not an input
+
+
+def test_cnt_change_1d_is_a_calendar_difference(feats):
+    """Every surviving row must use the two preceding *calendar* days. The
+    mirror lacks 2011-03-10, so a row-based diff would pair 2011-03-11 with
+    2011-03-09 (1977 - 1891 = 86) and label it a one-day change."""
+    by_date = feats.set_index("dteday")
+    raw = load_raw().set_index("dteday")[TARGET]
+    checked = 0
+    for date, change in by_date.cnt_change_1d.items():
+        d1, d2 = date - pd.Timedelta(days=1), date - pd.Timedelta(days=2)
+        assert d1 in raw.index and d2 in raw.index, f"{date.date()} spans a calendar gap"
+        assert change == pytest.approx(raw[d1] - raw[d2]), f"bad change at {date.date()}"
+        checked += 1
+    assert checked == len(feats)
+
+
 def test_no_missing_values(feats):
     assert feats[feature_columns(feats)].isna().sum().sum() == 0
 
